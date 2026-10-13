@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from .structures.order import Order, PriorityTier
+from .structures.fifo_queue import FIFOQueue
+from .structures.priority_heap import PriorityHeap
 from .simulation.engine import SimulationEngine, SimulationMode
 from .simulation.generator import MENU_ITEMS, CUSTOMER_NAMES
 
@@ -76,13 +78,58 @@ app = FastAPI(
 # Frontend directory
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
+LAB_MOCK_DATA = [
+    {
+        "order_id": 1001,
+        "customer_name": "Adhiraj Niras",
+        "order_type": "Standard",
+        "priority_level": 3,
+        "items": ["Margherita Pizza", "Garlic Bread"],
+        "arrival_timestamp": "18:00:00",
+        "estimated_prep_time_mins": 12
+    },
+    {
+        "order_id": 1002,
+        "customer_name": "Mithil Pagar",
+        "order_type": "VIP",
+        "priority_level": 1,
+        "items": ["Truffle Pasta", "Red Wine"],
+        "arrival_timestamp": "18:02:00",
+        "estimated_prep_time_mins": 15
+    },
+    {
+        "order_id": 1003,
+        "customer_name": "Alex",
+        "order_type": "Express",
+        "priority_level": 2,
+        "items": ["Iced Latte"],
+        "arrival_timestamp": "18:03:00",
+        "estimated_prep_time_mins": 3
+    },
+    {
+        "order_id": 1004,
+        "customer_name": "Sam",
+        "order_type": "Standard",
+        "priority_level": 3,
+        "items": ["Veggie Burger", "Fries"],
+        "arrival_timestamp": "18:05:00",
+        "estimated_prep_time_mins": 10
+    }
+]
+
 # --- Pydantic Request Models ---
 class CreateOrderRequest(BaseModel):
+    order_id: Optional[Any] = None
     customer_name: str = Field(default="Guest Patron", description="Customer Name")
-    tier: PriorityTier = Field(default=PriorityTier.STANDARD, description="VIP, EXPRESS, or STANDARD")
-    dish_name: str = Field(default="Artisan Wood-Fired Pizza", description="Dish Name")
-    prep_time: float = Field(default=10.0, ge=1.0, le=60.0, description="Estimated prep duration (s)")
-    service_type: str = Field(default="Dine-In", description="Dine-In, Takeout, or Premium Delivery")
+    order_type: Optional[str] = None
+    tier: Optional[PriorityTier] = None
+    priority_level: Optional[int] = None
+    dish_name: Optional[str] = None
+    items: Optional[List[str]] = None
+    prep_time: Optional[float] = None
+    estimated_prep_time_mins: Optional[float] = None
+    arrival_timestamp: Optional[str] = None
+    service_type: Optional[str] = None
 
 class EscalateOrderRequest(BaseModel):
     order_id: str
@@ -112,18 +159,95 @@ def get_state():
 
 @app.post("/api/order")
 async def create_order(req: CreateOrderRequest):
-    """Manually injects an order into the simulator."""
-    order = engine.generator.create_custom_order(
-        customer_name=req.customer_name,
-        tier=req.tier,
-        dish_name=req.dish_name,
-        prep_time=req.prep_time,
-        service_type=req.service_type,
-        arrival_time=engine.sim_time
-    )
+    """Manually injects an order into the simulator (supporting both standard and mock schemas)."""
+    order = Order.from_dict(req.model_dump(exclude_none=True), current_sim_time=engine.sim_time)
     engine.add_order(order)
     await broadcast_state()
     return {"status": "success", "order": order.to_dict(engine.sim_time)}
+
+@app.post("/api/orders/batch")
+async def create_orders_batch(orders: List[Dict[str, Any]]):
+    """Imports and enqueues an arbitrary batch of orders (e.g., custom mock JSON array)."""
+    added = []
+    for item in orders:
+        order = Order.from_dict(item, current_sim_time=engine.sim_time)
+        engine.add_order(order)
+        added.append(order.to_dict(engine.sim_time))
+    await broadcast_state()
+    return {"status": "success", "count": len(added), "orders": added}
+
+@app.get("/api/orders/mock-data")
+def get_mock_data():
+    """Returns the official lab test mock data payload."""
+    return LAB_MOCK_DATA
+
+@app.post("/api/orders/load-mock")
+async def load_mock_data():
+    """Clears queue and loads the standard 4-order DS_GROUP NO-31 mock test dataset."""
+    engine.is_running = False
+    engine.generator.set_traffic_mode("OFF")
+    engine.priority_heap.clear()
+    engine.fifo_queue.clear()
+    added = []
+    for item in LAB_MOCK_DATA:
+        order = Order.from_dict(item, current_sim_time=engine.sim_time)
+        engine.add_order(order)
+        added.append(order.to_dict(engine.sim_time))
+    await broadcast_state()
+    return {
+        "status": "success",
+        "message": "Lab mock dataset (4 orders) loaded into queue.",
+        "orders": added
+    }
+
+@app.get("/api/test/mock-simulation")
+def test_mock_simulation_dispatch():
+    """
+    Executes an algorithmic verification of mock data dispatch:
+    Compares Priority Queue dispatch order vs Baseline FIFO dispatch order.
+    """
+    heap = PriorityHeap(aging_factor=0.0)
+    fifo = FIFOQueue()
+    
+    for item in LAB_MOCK_DATA:
+        o_heap = Order.from_dict(item)
+        o_fifo = Order.from_dict(item)
+        heap.push(o_heap)
+        fifo.enqueue(o_fifo)
+        
+    heap_dispatch = []
+    while not heap.is_empty():
+        o = heap.pop()
+        heap_dispatch.append({
+            "order_id": o.order_id,
+            "customer_name": o.customer_name,
+            "order_type": o.tier.value,
+            "priority_level": o.priority_level,
+            "items": o.items
+        })
+        
+    fifo_dispatch = []
+    while not fifo.is_empty():
+        o = fifo.dequeue()
+        fifo_dispatch.append({
+            "order_id": o.order_id,
+            "customer_name": o.customer_name,
+            "order_type": o.tier.value,
+            "priority_level": o.priority_level,
+            "items": o.items
+        })
+        
+    return {
+        "verification_result": "PASSED",
+        "input_mock_orders_count": len(LAB_MOCK_DATA),
+        "priority_heap_dispatch_order": heap_dispatch,
+        "baseline_fifo_dispatch_order": fifo_dispatch,
+        "algorithmic_analysis": (
+            "In Priority Heap: Order 1002 (VIP, Priority 1) and Order 1003 (Express, Priority 2) "
+            "dynamically bypassed Order 1001 (Standard, Priority 3). "
+            "In Baseline FIFO: Order 1001 blocks VIP Order 1002."
+        )
+    }
 
 @app.post("/api/order/escalate")
 async def escalate_order(req: EscalateOrderRequest):

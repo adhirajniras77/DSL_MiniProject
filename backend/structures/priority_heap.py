@@ -31,14 +31,20 @@ class PriorityHeap:
         """
         Returns True if order_a has HIGHER priority than order_b.
         1. Compare priority score (Tier base + wait time * aging).
-        2. Tie-break: order arrived earlier (lower sequence_num).
+           Equivalently in Min-Heap representation: Lower Priority Level (1 < 2 < 3).
+        2. Tie-break: order arrived earlier (lower arrival_time, then sequence_num).
         """
         score_a = order_a.calculate_priority_score(current_time, self.aging_factor)
         score_b = order_b.calculate_priority_score(current_time, self.aging_factor)
         
         if abs(score_a - score_b) > 0.001:
             return score_a > score_b
-        # Tie breaker: earlier arrival gets priority
+            
+        # Tie breaker 1: earlier arrival timestamp
+        if abs(order_a.arrival_time - order_b.arrival_time) > 0.001:
+            return order_a.arrival_time < order_b.arrival_time
+            
+        # Tie breaker 2: sequence number
         return order_a.sequence_num < order_b.sequence_num
 
     def _parent(self, i: int) -> int:
@@ -248,7 +254,9 @@ class PriorityHeap:
                 "order_id": order.order_id,
                 "customer_name": order.customer_name,
                 "tier": order.tier.value,
+                "priority_level": order.priority_level,
                 "dish_name": order.dish_name,
+                "items": order.items,
                 "prep_time": order.prep_time,
                 "priority_score": round(score, 1),
                 "is_escalated": order.is_escalated,
@@ -275,7 +283,9 @@ class PriorityHeap:
                 "order_id": order.order_id,
                 "customer": order.customer_name,
                 "tier": order.tier.value,
+                "priority_level": order.priority_level,
                 "dish": order.dish_name,
+                "items": order.items,
                 "score": round(order.calculate_priority_score(current_time, self.aging_factor), 1)
             })
         return result

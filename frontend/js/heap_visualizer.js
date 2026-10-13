@@ -152,13 +152,13 @@ class HeapVisualizer {
     this.ctx.fillStyle = textColor;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    const idShort = item.order_id ? item.order_id.replace('ORD-', '#') : `#${index}`;
+    const idShort = item.order_id ? (String(item.order_id).startsWith('#') ? String(item.order_id) : `#${String(item.order_id).replace('ORD-', '')}`) : `#${index}`;
     this.ctx.fillText(idShort, x, y - 4);
 
-    // Score badge below center
+    // Score and Priority Rank badge below center
     this.ctx.font = '9px JetBrains Mono, monospace';
-    this.ctx.fillStyle = '#94a3b8';
-    this.ctx.fillText(`P:${Math.round(item.score || 0)}`, x, y + 8);
+    const pRank = item.priority_level ? `P${item.priority_level}` : (tier === 'VIP' ? 'P1' : (tier === 'EXPRESS' ? 'P2' : 'P3'));
+    this.ctx.fillText(`${pRank} [${Math.round(item.score || 0)}]`, x, y + 8);
 
     this.ctx.restore();
   }

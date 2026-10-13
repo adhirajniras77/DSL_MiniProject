@@ -142,5 +142,101 @@ class TestRestaurantSimulatorDataStructures(unittest.TestCase):
         # In priority heap, VIP 2 must be ahead of Std 2
         self.assertEqual(state["queue_orders"][0]["tier"], "VIP")
 
+    def test_mock_data_priority_dispatch(self):
+        """
+        Tests the exact JSON mock payload specified for lab evaluation:
+        1001: Standard (P3), 18:00:00
+        1002: VIP (P1), 18:02:00
+        1003: Express (P2), 18:03:00
+        1004: Standard (P3), 18:05:00
+        """
+        mock_payload = [
+            {
+                "order_id": 1001,
+                "customer_name": "Adhiraj Niras",
+                "order_type": "Standard",
+                "priority_level": 3,
+                "items": ["Margherita Pizza", "Garlic Bread"],
+                "arrival_timestamp": "18:00:00",
+                "estimated_prep_time_mins": 12
+            },
+            {
+                "order_id": 1002,
+                "customer_name": "Mithil Pagar",
+                "order_type": "VIP",
+                "priority_level": 1,
+                "items": ["Truffle Pasta", "Red Wine"],
+                "arrival_timestamp": "18:02:00",
+                "estimated_prep_time_mins": 15
+            },
+            {
+                "order_id": 1003,
+                "customer_name": "Alex",
+                "order_type": "Express",
+                "priority_level": 2,
+                "items": ["Iced Latte"],
+                "arrival_timestamp": "18:03:00",
+                "estimated_prep_time_mins": 3
+            },
+            {
+                "order_id": 1004,
+                "customer_name": "Sam",
+                "order_type": "Standard",
+                "priority_level": 3,
+                "items": ["Veggie Burger", "Fries"],
+                "arrival_timestamp": "18:05:00",
+                "estimated_prep_time_mins": 10
+            }
+        ]
+
+        # 1. Test in Priority Heap (Aging factor 0 to test pure priority tiers)
+        heap = PriorityHeap(aging_factor=0.0)
+        for item in mock_payload:
+            order = Order.from_dict(item)
+            heap.push(order)
+
+        self.assertEqual(heap.size(), 4)
+
+        # Dequeue must return: 1002 (VIP) -> 1003 (Express) -> 1001 (Standard) -> 1004 (Standard)
+        d1 = heap.pop()
+        self.assertEqual(d1.order_id, "1002")
+        self.assertEqual(d1.customer_name, "Mithil Pagar")
+        self.assertEqual(d1.tier, PriorityTier.VIP)
+        self.assertEqual(d1.priority_level, 1)
+
+        d2 = heap.pop()
+        self.assertEqual(d2.order_id, "1003")
+        self.assertEqual(d2.customer_name, "Alex")
+        self.assertEqual(d2.tier, PriorityTier.EXPRESS)
+        self.assertEqual(d2.priority_level, 2)
+
+        d3 = heap.pop()
+        self.assertEqual(d3.order_id, "1001")
+        self.assertEqual(d3.customer_name, "Adhiraj Niras")
+        self.assertEqual(d3.tier, PriorityTier.STANDARD)
+        self.assertEqual(d3.priority_level, 3)
+
+        d4 = heap.pop()
+        self.assertEqual(d4.order_id, "1004")
+        self.assertEqual(d4.customer_name, "Sam")
+        self.assertEqual(d4.tier, PriorityTier.STANDARD)
+        self.assertEqual(d4.priority_level, 3)
+
+        # 2. Test in Baseline FIFO Queue
+        fifo = FIFOQueue()
+        for item in mock_payload:
+            order = Order.from_dict(item)
+            fifo.enqueue(order)
+
+        # Chronological order: 1001 -> 1002 -> 1003 -> 1004
+        f1 = fifo.dequeue()
+        self.assertEqual(f1.order_id, "1001")
+        f2 = fifo.dequeue()
+        self.assertEqual(f2.order_id, "1002")
+        f3 = fifo.dequeue()
+        self.assertEqual(f3.order_id, "1003")
+        f4 = fifo.dequeue()
+        self.assertEqual(f4.order_id, "1004")
+
 if __name__ == "__main__":
     unittest.main()

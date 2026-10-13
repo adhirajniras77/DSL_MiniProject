@@ -117,4 +117,30 @@ class SimulatorAPI {
     const res = await fetch(`${this.baseUrl}/api/state`);
     return res.json();
   }
+
+  async loadMockData() {
+    const res = await fetch(`${this.baseUrl}/api/orders/load-mock`, {
+      method: 'POST'
+    });
+    return res.json();
+  }
+
+  async fetchMockData() {
+    const res = await fetch(`${this.baseUrl}/api/orders/mock-data`);
+    return res.json();
+  }
+
+  async importBatch(ordersArray) {
+    const res = await fetch(`${this.baseUrl}/api/orders/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ordersArray)
+    });
+    return res.json();
+  }
+
+  async verifyMockSimulation() {
+    const res = await fetch(`${this.baseUrl}/api/test/mock-simulation`);
+    return res.json();
+  }
 }

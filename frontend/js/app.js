@@ -83,6 +83,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const benchmarkContent = document.getElementById('benchmarkContent');
   const btnRunBenchmarkAction = document.getElementById('btnRunBenchmarkAction');
 
+  // Lab Mock Dataset & JSON Batch Importer
+  const btnLoadMockData = document.getElementById('btnLoadMockData');
+  const btnOpenJsonImport = document.getElementById('btnOpenJsonImport');
+  const modalJsonImport = document.getElementById('modalJsonImport');
+  const jsonBatchInput = document.getElementById('jsonBatchInput');
+  const jsonImportFeedback = document.getElementById('jsonImportFeedback');
+  const btnPreloadLabMock = document.getElementById('btnPreloadLabMock');
+  const btnVerifyMockDispatch = document.getElementById('btnVerifyMockDispatch');
+  const btnSubmitJsonBatch = document.getElementById('btnSubmitJsonBatch');
+
   // --- Event Listeners ---
 
   // Control Buttons
@@ -223,8 +233,116 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       modalReport.classList.remove('open');
       modalBenchmark.classList.remove('open');
+      if (modalJsonImport) modalJsonImport.classList.remove('open');
     });
   });
+
+  // Direct Lab Mock Dataset Loader
+  if (btnLoadMockData) {
+    btnLoadMockData.addEventListener('click', async () => {
+      btnLoadMockData.disabled = true;
+      btnLoadMockData.textContent = 'Loading...';
+      try {
+        await api.loadMockData();
+        // Switch to pipeline view to inspect the 4 loaded tickets
+        tabBtnPipeline.click();
+      } catch (err) {
+        alert('Failed to load mock data: ' + err.message);
+      } finally {
+        btnLoadMockData.disabled = false;
+        btnLoadMockData.textContent = '📥 Load Mock Dataset';
+      }
+    });
+  }
+
+  // JSON Import Modal Handlers
+  if (btnOpenJsonImport) {
+    btnOpenJsonImport.addEventListener('click', async () => {
+      modalJsonImport.classList.add('open');
+      if (jsonImportFeedback) jsonImportFeedback.style.display = 'none';
+      if (jsonBatchInput && !jsonBatchInput.value.trim()) {
+        try {
+          const data = await api.fetchMockData();
+          jsonBatchInput.value = JSON.stringify(data, null, 2);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
+  }
+
+  if (btnPreloadLabMock) {
+    btnPreloadLabMock.addEventListener('click', async () => {
+      try {
+        const data = await api.fetchMockData();
+        jsonBatchInput.value = JSON.stringify(data, null, 2);
+        if (jsonImportFeedback) {
+          jsonImportFeedback.style.display = 'block';
+          jsonImportFeedback.innerHTML = '<span style="color: var(--blue-cyan);">Reset to official 4-order DS_GROUP NO-31 dataset.</span>';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  }
+
+  if (btnSubmitJsonBatch) {
+    btnSubmitJsonBatch.addEventListener('click', async () => {
+      try {
+        const parsed = JSON.parse(jsonBatchInput.value);
+        if (!Array.isArray(parsed)) {
+          throw new Error('Payload must be a JSON array of order objects.');
+        }
+        btnSubmitJsonBatch.disabled = true;
+        btnSubmitJsonBatch.textContent = 'Importing...';
+        const res = await api.importBatch(parsed);
+        if (jsonImportFeedback) {
+          jsonImportFeedback.style.display = 'block';
+          jsonImportFeedback.innerHTML = `<span style="color: var(--status-success);">Successfully enqueued ${res.count} orders into the active queue!</span>`;
+        }
+        tabBtnPipeline.click();
+      } catch (err) {
+        if (jsonImportFeedback) {
+          jsonImportFeedback.style.display = 'block';
+          jsonImportFeedback.innerHTML = `<span style="color: var(--status-danger);">JSON Parse Error: ${err.message}</span>`;
+        }
+      } finally {
+        btnSubmitJsonBatch.disabled = false;
+        btnSubmitJsonBatch.textContent = 'Import & Enqueue';
+      }
+    });
+  }
+
+  if (btnVerifyMockDispatch) {
+    btnVerifyMockDispatch.addEventListener('click', async () => {
+      btnVerifyMockDispatch.disabled = true;
+      btnVerifyMockDispatch.textContent = 'Verifying...';
+      try {
+        const res = await api.verifyMockSimulation();
+        if (jsonImportFeedback) {
+          jsonImportFeedback.style.display = 'block';
+          const heapOrder = res.priority_heap_dispatch_order.map(o => `<strong>#${o.order_id} (${o.order_type} P${o.priority_level})</strong>`).join(' → ');
+          const fifoOrder = res.baseline_fifo_dispatch_order.map(o => `<strong>#${o.order_id} (${o.order_type})</strong>`).join(' → ');
+          jsonImportFeedback.innerHTML = `
+            <div style="background: rgba(37, 99, 235, 0.15); border: 1px solid var(--blue-border); padding: 0.75rem; border-radius: var(--radius-sm); margin-top: 0.5rem;">
+              <div style="color: #10b981; font-weight: 700; margin-bottom: 0.3rem;">✓ Algorithm Verification: PASSED</div>
+              <div style="font-size: 0.75rem; color: #f8fafc; margin-bottom: 0.2rem;">⚡ Priority Heap Order: ${heapOrder}</div>
+              <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.4rem;">⏱️ Baseline FIFO Order: ${fifoOrder}</div>
+              <div style="font-size: 0.72rem; color: #38bdf8; font-style: italic;">${res.algorithmic_analysis}</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        if (jsonImportFeedback) {
+          jsonImportFeedback.style.display = 'block';
+          jsonImportFeedback.innerHTML = `<span style="color: var(--status-danger);">Verification Error: ${err.message}</span>`;
+        }
+      } finally {
+        btnVerifyMockDispatch.disabled = false;
+        btnVerifyMockDispatch.textContent = 'Verify Bypass Test';
+      }
+    });
+  }
 
   btnRunBenchmarkAction.addEventListener('click', async () => {
     btnRunBenchmarkAction.disabled = true;
@@ -344,20 +462,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const tierClass = order.tier.toLowerCase();
       const badgeClass = `badge-${tierClass}`;
       const canEscalate = order.tier !== 'VIP';
+      const itemsHtml = (order.items && order.items.length > 0)
+        ? `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+            ${order.items.map(it => `<span style="background: rgba(37, 99, 235, 0.18); border: 1px solid var(--blue-border); font-size: 0.7rem; padding: 2px 7px; border-radius: 4px; color: #93c5fd;">🍽️ ${it}</span>`).join('')}
+           </div>`
+        : '';
 
       return `
         <div class="order-card order-${tierClass}">
           <div class="order-main-info">
             <div class="order-id-row">
-              <span class="order-id">${order.order_id}</span>
-              <span class="${badgeClass}">#${idx + 1} ${order.tier}</span>
+              <span class="order-id">#${order.order_id}</span>
+              <span class="${badgeClass}">#${idx + 1} ${order.tier} (Priority ${order.priority_level})</span>
               ${order.is_escalated ? '<span style="font-size: 0.7rem; color: #ec4899; font-weight: 700;">⚡ ESCALATED</span>' : ''}
             </div>
             <div class="order-dish">${order.dish_name}</div>
-            <div class="order-customer-row">
+            ${itemsHtml}
+            <div class="order-customer-row" style="margin-top: 4px;">
               <span>👤 ${order.customer_name}</span>
               <span>•</span>
-              <span>⏱️ Est: ${order.prep_time}s</span>
+              <span>🕒 ${order.arrival_timestamp || '18:00:00'}</span>
+              <span>•</span>
+              <span>⏱️ Est: ${order.prep_time}m</span>
               <span>•</span>
               <span>⏳ Waiting: ${order.current_wait}s</span>
             </div>

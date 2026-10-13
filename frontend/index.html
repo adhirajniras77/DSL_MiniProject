@@ -55,10 +55,16 @@
       </button>
 
       <!-- Modal Triggers -->
+      <button id="btnLoadMockData" class="btn btn-outline" style="border-color: var(--blue-cyan); color: var(--blue-cyan);" title="Directly load the 4-order DS_GROUP NO-31 mock test payload">
+        📥 Load Mock Dataset
+      </button>
+      <button id="btnOpenJsonImport" class="btn btn-outline" style="border-color: #a855f7; color: #c084fc;" title="Import arbitrary JSON array of orders">
+        { } JSON Import
+      </button>
       <button id="btnOpenBenchmark" class="btn btn-outline" style="border-color: var(--blue-secondary); color: var(--blue-light);">
         📊 Benchmark
       </button>
-      <button id="btnOpenReport" class="btn btn-outline" style="border-color: var(--blue-secondary); color: var(--blue-cyan);">
+      <button id="btnOpenReport" class="btn btn-outline" style="border-color: var(--blue-secondary); color: var(--text-primary);">
         📄 Academic Report
       </button>
     </div>
@@ -396,6 +402,33 @@
       </div>
       <div class="modal-footer">
         <button id="btnRunBenchmarkAction" class="btn btn-primary">Run 30-Order Benchmark</button>
+        <button class="btn btn-outline btn-modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: JSON Batch Import -->
+  <div id="modalJsonImport" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">{ } Custom JSON Batch Order Importer</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">
+          Paste any JSON array of orders to test custom arrival bursts. Supports official lab fields:
+          <code style="color: var(--blue-cyan);">priority_level (1=VIP, 2=Express, 3=Standard)</code>,
+          <code style="color: var(--blue-cyan);">items</code>,
+          <code style="color: var(--blue-cyan);">arrival_timestamp</code>, and
+          <code style="color: var(--blue-cyan);">estimated_prep_time_mins</code>.
+        </p>
+        <textarea id="jsonBatchInput" rows="12" style="width: 100%; background: var(--bg-input); border: 1px solid var(--blue-border); border-radius: var(--radius-md); padding: 0.75rem; color: var(--blue-light); font-family: var(--font-mono); font-size: 0.78rem; outline: none; resize: vertical;"></textarea>
+        <div id="jsonImportFeedback" style="font-size: 0.8rem; display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnPreloadLabMock" class="btn btn-outline" style="border-color: var(--blue-cyan); color: var(--blue-cyan);">Reset to Lab Mock Payload</button>
+        <button id="btnVerifyMockDispatch" class="btn btn-outline" style="border-color: #ec4899; color: #f472b6;">Verify Bypass Test</button>
+        <button id="btnSubmitJsonBatch" class="btn btn-primary">Import & Enqueue</button>
         <button class="btn btn-outline btn-modal-close">Close</button>
       </div>
     </div>
