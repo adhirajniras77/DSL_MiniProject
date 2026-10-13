@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queue-Based Simulator For Restaurant Order Management | DS_GROUP NO-31</title>
+  <meta name="description" content="A comprehensive full-stack Data Structures simulation demonstrating FIFO Queues vs Algorithmic Priority Heaps for dynamic restaurant order management and multi-server kitchen throughput.">
+  
+  <!-- Modern Typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js CDN for High-Performance Dark Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Application Stylesheet -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-info">
+        <h1>Restaurant Order <span class="highlight">Queue Simulator</span></h1>
+        <div class="brand-meta">
+          <span class="meta-badge">DS_GROUP NO-31</span>
+          <span>NMIET Pune • IT Dept • Adhiraj Niras & Mithil Pagar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Live Simulation Clock -->
+      <div class="sim-clock-display" title="Elapsed simulation time">
+        <div id="clockPulse" class="clock-pulse paused"></div>
+        <span>SIM TIME:</span>
+        <strong id="simClock">0.0s</strong>
+      </div>
+
+      <!-- Playback Controls -->
+      <button id="btnPlay" class="btn btn-primary" title="Resume Simulation">
+        ▶ Play
+      </button>
+      <button id="btnPause" class="btn btn-outline" title="Pause Simulation">
+        ⏸ Pause
+      </button>
+      <button id="btnStep" class="btn btn-outline" title="Step forward 1.0 second">
+        ⏭ Step (1s)
+      </button>
+      <button id="btnReset" class="btn btn-outline" title="Reset Simulation">
+        🔄 Reset
+      </button>
+
+      <!-- Modal Triggers -->
+      <button id="btnOpenBenchmark" class="btn btn-outline" style="border-color: var(--blue-secondary); color: var(--blue-light);">
+        📊 Benchmark
+      </button>
+      <button id="btnOpenReport" class="btn btn-outline" style="border-color: var(--blue-secondary); color: var(--blue-cyan);">
+        📄 Academic Report
+      </button>
+    </div>
+  </header>
+
+  <!-- Strategy & Parameter Configuration Toolbar -->
+  <section class="strategy-bar">
+    <div class="strategy-group">
+      <span class="strategy-label">Queue Discipline:</span>
+      <div class="segmented-toggle">
+        <div id="togglePriority" class="toggle-option active" title="Algorithmic Priority Queue (Max-Heap) with dynamic escalation">
+          ⚡ Priority Queue (Heap)
+        </div>
+        <div id="toggleFifo" class="toggle-option" title="Baseline linear FIFO Queue">
+          ⏱ Baseline FIFO
+        </div>
+      </div>
+    </div>
+
+    <div class="quick-actions">
+      <!-- Kitchen Server Capacity -->
+      <div class="param-pill">
+        <span>👨‍🍳 Chef Servers:</span>
+        <select id="selectChefCount" aria-label="Chef Servers Count">
+          <option value="1">1 Chef (Single Server)</option>
+          <option value="2">2 Chefs</option>
+          <option value="3" selected>3 Chefs (Balanced)</option>
+          <option value="4">4 Chefs</option>
+          <option value="5">5 Chefs</option>
+          <option value="6">6 Chefs (High Throughput)</option>
+        </select>
+      </div>
+
+      <!-- Chaotic Arrival Traffic Mode -->
+      <div class="param-pill">
+        <span>🌊 Arrival Dynamics:</span>
+        <select id="selectTraffic" aria-label="Arrival Dynamics Mode">
+          <option value="OFF">Manual Only (Off)</option>
+          <option value="CALM">Calm (8-16s)</option>
+          <option value="NORMAL" selected>Normal Flow (4-9s)</option>
+          <option value="RUSH_HOUR">Rush Hour (1.5-4s)</option>
+          <option value="CHAOTIC">Chaotic Bursts (Poisson)</option>
+        </select>
+      </div>
+
+      <!-- Dynamic Aging Slider -->
+      <div class="param-pill" title="Anti-starvation weight aging per second">
+        <span>⏳ Aging Rate:</span>
+        <input type="range" id="sliderAging" min="0" max="2" step="0.1" value="0.5" style="width: 70px;">
+        <span id="valAging" style="color: var(--blue-cyan); font-weight: 700; width: 30px;">0.5x</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Dashboard Container -->
+  <main class="dashboard-container">
+
+    <!-- Top Statistical Metric Cards -->
+    <section class="metrics-grid">
+      <!-- Metric 1: Avg Wait Time -->
+      <div class="metric-card accent-cyan">
+        <div class="metric-header">
+          <span class="metric-title">Average Wait Time</span>
+          <span class="metric-icon">⏳</span>
+        </div>
+        <div class="metric-value-row">
+          <span id="valAvgWait" class="metric-value">0.0</span>
+          <span class="metric-unit">seconds</span>
+        </div>
+        <div class="metric-breakdown">
+          <span id="valWaitVip" class="badge-vip">VIP: 0.0s</span>
+          <span id="valWaitExpress" class="badge-express">Exp: 0.0s</span>
+          <span id="valWaitStandard" class="badge-standard">Std: 0.0s</span>
+        </div>
+      </div>
+
+      <!-- Metric 2: Max Queue Length -->
+      <div class="metric-card">
+        <div class="metric-header">
+          <span class="metric-title">Current Queue Depth</span>
+          <span class="metric-icon">📑</span>
+        </div>
+        <div class="metric-value-row">
+          <span id="valQueueLength" class="metric-value">0</span>
+          <span class="metric-unit">orders</span>
+        </div>
+        <div class="metric-breakdown">
+          <span id="valMaxQueue" style="color: var(--blue-light); font-weight: 600;">Peak: 0</span>
+          <span style="color: var(--text-muted);">|</span>
+          <span style="color: var(--text-secondary);">Dynamic Heap Invariant Valid</span>
+        </div>
+      </div>
+
+      <!-- Metric 3: Chef Server Utilization -->
+      <div class="metric-card accent-green">
+        <div class="metric-header">
+          <span class="metric-title">Kitchen Server Utilization</span>
+          <span class="metric-icon">🔥</span>
+        </div>
+        <div class="metric-value-row">
+          <span id="valChefFleetUtil" class="metric-value">0.0%</span>
+        </div>
+        <div class="metric-breakdown">
+          <span style="color: var(--status-success); font-weight: 600;">Active Multi-Server Pool</span>
+          <span style="color: var(--text-muted);">|</span>
+          <span style="color: var(--text-secondary);">Idle vs Busy Workload</span>
+        </div>
+      </div>
+
+      <!-- Metric 4: Throughput -->
+      <div class="metric-card accent-vip">
+        <div class="metric-header">
+          <span class="metric-title">Kitchen Throughput</span>
+          <span class="metric-icon">⚡</span>
+        </div>
+        <div class="metric-value-row">
+          <span id="valThroughput" class="metric-value">0.0</span>
+          <span class="metric-unit">orders / min</span>
+        </div>
+        <div class="metric-breakdown">
+          <span id="valTotalCompleted" style="color: var(--tier-vip-color); font-weight: 600;">Total: 0</span>
+          <span style="color: var(--text-muted);">|</span>
+          <span style="color: var(--text-secondary);">Turnaround Optimized</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Workspace Grid: Queue Visualizer vs Kitchen Stations -->
+    <section class="workspace-grid">
+
+      <!-- Left Column: Queue & Data Structure Visualizer -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>Data Structure Queue State</span>
+            <span id="activeQueueCountBadge" class="panel-title-badge">0 Orders</span>
+          </div>
+
+          <div class="panel-tabs">
+            <button id="tabBtnHeap" class="tab-btn active">Binary Heap Tree</button>
+            <button id="tabBtnPipeline" class="tab-btn">Queue Pipeline List</button>
+          </div>
+        </div>
+
+        <!-- View 1: Canvas Heap Visualizer -->
+        <div id="heapViewSection" class="heap-visualizer-container">
+          <div class="heap-canvas-wrapper">
+            <canvas id="heapCanvas"></canvas>
+          </div>
+          <!-- Underlying Array Representation Inspector -->
+          <div class="heap-array-bar" id="heapArrayCells" title="Indexed Array Representation of Binary Heap (parent=(i-1)/2, left=2i+1, right=2i+2)">
+            <!-- Cells generated dynamically -->
+          </div>
+        </div>
+
+        <!-- View 2: Queue Pipeline List -->
+        <div id="pipelineViewSection" class="queue-pipeline-container" style="display: none;">
+          <div id="queueCardsList">
+            <!-- Dynamically populated order cards -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Kitchen Stations (Chef Servers) -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>Kitchen Chef Stations</span>
+            <span class="panel-title-badge">Multi-Server Dispatch</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-secondary);">Concurrent Service Lines</span>
+        </div>
+
+        <!-- Chefs Grid -->
+        <div id="chefsContainer" class="chefs-grid">
+          <!-- Dynamically populated chef cards -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Performance Charts Section -->
+    <section class="charts-grid">
+      <!-- Chart 1: Queue Depth Timeline -->
+      <div class="chart-card">
+        <div class="panel-header" style="border: none; padding-bottom: 0;">
+          <div class="panel-title">
+            <span>Queue Depth Dynamics Over Time</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--blue-cyan);">Live Simulation Timeline</span>
+        </div>
+        <div class="chart-canvas-container">
+          <canvas id="chartQueueTimeline"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Average Wait Times by Tier -->
+      <div class="chart-card">
+        <div class="panel-header" style="border: none; padding-bottom: 0;">
+          <div class="panel-title">
+            <span>Average Waiting Latency By Tier</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--blue-cyan);">VIP vs Express vs Standard</span>
+        </div>
+        <div class="chart-canvas-container">
+          <canvas id="chartWaitTimes"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Row: Order Injection Station & Live Activity Stream -->
+    <section class="bottom-grid">
+
+      <!-- Order Injection Station -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>Order Injection Station</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-secondary);">Test Dynamic Interception</span>
+        </div>
+
+        <form id="orderForm" class="order-form-grid">
+          <div class="form-group">
+            <label class="form-label">Customer Name</label>
+            <input type="text" id="inputCustomer" class="form-input" value="Adhiraj N." required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Priority Tier</label>
+            <select id="selectTier" class="form-select">
+              <option value="VIP" selected>⭐ VIP Tier (Expedited / Gold)</option>
+              <option value="EXPRESS">⚡ Express Tier (Takeout / Cyan)</option>
+              <option value="STANDARD">☕ Standard Tier (Dine-In / Slate)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Dish / Ticket Item</label>
+            <select id="selectDish" class="form-select">
+              <option value="Prime Wagyu Steak">Prime Wagyu Steak (16s)</option>
+              <option value="Truffle Mushroom Risotto">Truffle Mushroom Risotto (14s)</option>
+              <option value="Spicy Tonkotsu Ramen">Spicy Tonkotsu Ramen (10s)</option>
+              <option value="Artisan Wood-Fired Pizza">Artisan Wood-Fired Pizza (12s)</option>
+              <option value="Smoked Angus Burger & Fries">Smoked Angus Burger & Fries (9s)</option>
+              <option value="Classic Caesar Salad">Classic Caesar Salad (5s)</option>
+              <option value="Espresso Affogato & Pastry">Espresso Affogato & Pastry (4s)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              Prep Duration: <span id="valPrepTime" style="color: var(--blue-cyan); font-weight: 700;">12s</span>
+            </label>
+            <input type="range" id="inputPrepTime" min="3" max="25" step="1" value="12" style="margin-top: 0.4rem; accent-color: var(--blue-secondary);">
+          </div>
+
+          <div class="form-group full-width">
+            <button type="submit" class="btn btn-primary" style="justify-content: center; width: 100%; padding: 0.6rem;">
+              ➕ Inject Order into Queue
+            </button>
+          </div>
+        </form>
+
+        <!-- Quick Preset Triggers -->
+        <div style="border-top: 1px solid var(--blue-border); padding-top: 0.75rem;">
+          <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Quick Test Presets:</span>
+          <div class="preset-buttons-row">
+            <button class="btn-preset" data-tier="VIP" data-dish="Prime Wagyu Steak" data-prep="16">
+              ⭐ VIP Wagyu (16s)
+            </button>
+            <button class="btn-preset" data-tier="EXPRESS" data-dish="Spicy Tonkotsu Ramen" data-prep="9">
+              ⚡ Express Ramen (9s)
+            </button>
+            <button class="btn-preset" data-tier="STANDARD" data-dish="Artisan Wood-Fired Pizza" data-prep="12">
+              ☕ Standard Pizza (12s)
+            </button>
+            <button class="btn-preset" data-burst="5" style="border-color: #ec4899; color: #f472b6;">
+              💥 Rush Burst (5 Mixed Orders)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Event Activity Stream -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>Kitchen Event Activity Stream</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--blue-cyan);">Live Dispatch Log</span>
+        </div>
+
+        <div id="eventFeed" class="event-feed">
+          <!-- Real-time activity log rows -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal: Academic Report (DS_GROUP NO-31) -->
+  <div id="modalReport" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">📄 Academic Simulation Report</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div id="reportContent" class="modal-body">
+        <!-- Generated report details -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Print Report</button>
+        <button class="btn btn-primary btn-modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Comparative Benchmark (FIFO vs Priority Heap) -->
+  <div id="modalBenchmark" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">📊 Algorithmic Comparative Benchmark</div>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div id="benchmarkContent" class="modal-body">
+        <p>
+          Simulate an identical stream of 30 randomized chaotic orders through both the
+          <strong>Baseline FIFO Queue</strong> and the <strong>Algorithmic Priority Max-Heap</strong>.
+        </p>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">
+          This mathematically demonstrates the project thesis: proving that the Priority Queue prevents VIP order starvation and dramatically cuts high-priority wait times without degrading overall kitchen throughput.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button id="btnRunBenchmarkAction" class="btn btn-primary">Run 30-Order Benchmark</button>
+        <button class="btn btn-outline btn-modal-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic Scripts -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/heap_visualizer.js"></script>
+  <script src="/static/js/charts.js"></script>
+  <script src="/static/js/app.js"></script>
+
+</body>
+</html>
