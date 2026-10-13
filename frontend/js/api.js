@@ -36,15 +36,30 @@ class SimulatorAPI {
 
       this.ws.onclose = () => {
         if (this.onConnectionChange) this.onConnectionChange(false);
+        this.startPollingFallback();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = () => {
         if (this.onConnectionChange) this.onConnectionChange(false);
+        this.startPollingFallback();
       };
     } catch (e) {
       console.error("WebSocket connection attempt failed:", e);
+      this.startPollingFallback();
       this.scheduleReconnect();
+    }
+  }
+
+  startPollingFallback() {
+    if (!this.pollTimer) {
+      this.pollTimer = setInterval(async () => {
+        try {
+          const state = await this.fetchInitialState();
+          if (this.onStateUpdate) this.onStateUpdate(state);
+          if (this.onConnectionChange) this.onConnectionChange(true);
+        } catch (e) {}
+      }, 1000);
     }
   }
 
@@ -52,7 +67,7 @@ class SimulatorAPI {
     if (!this.reconnectTimer) {
       this.reconnectTimer = setTimeout(() => {
         this.initWebSocket();
-      }, 2500);
+      }, 5000);
     }
   }
 
